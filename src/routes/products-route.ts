@@ -1,17 +1,9 @@
 import { Request, Response, Router } from 'express'
 import { HTTP_STATUS } from '../constants/httpStatus'
+import { productRepository } from '../repositories/products.repository'
+import { Product } from '../types/products.types'
 
 export const productsRoute = Router({})
-
-type Product = {
-	id: number
-	title: string
-}
-
-let products: Product[] = [
-	{ id: 1, title: 'Apple' },
-	{ id: 2, title: 'Banana' },
-]
 
 // PRODUCTS ROUTES
 
@@ -19,7 +11,10 @@ productsRoute.get(
 	'/products',
 	(req: Request, res: Response<Product[] | { message: string }>) => {
 		try {
-			res.json(products)
+			const foundProducts = productRepository.findProducts(
+				req.query.title as string
+			)
+			res.json(foundProducts)
 		} catch {
 			res
 				.status(HTTP_STATUS.INTERNAL_SERVER_ERROR_500)
@@ -35,12 +30,11 @@ productsRoute.get(
 		res: Response<Product | { message: string }>
 	) => {
 		try {
-			const productId = parseInt(req.params.id)
-			const product = products.find(item => item.id === productId)
+			const product = productRepository.findProductById(req.params.id)
 			if (!product) {
 				return res
 					.status(HTTP_STATUS.NOT_FOUND_404)
-					.json({ message: 'Product Not Found' })
+					.json({ message: 'Product not found' })
 			}
 			res.json(product)
 		} catch {
@@ -62,8 +56,7 @@ productsRoute.post(
 					.json({ message: 'TITLE IS REQUIRED' })
 			}
 
-			const newProduct: Product = { id: Date.now(), title }
-			products.push(newProduct)
+			const newProduct = productRepository.createProduct(title)
 			res.json(newProduct)
 		} catch {
 			res
@@ -77,14 +70,20 @@ productsRoute.put(
 	'/products/:id',
 	(req: Request<{ id: string }, {}, { title: string }>, res: Response) => {
 		try {
-			const productId = parseInt(req.params.id)
-			const product = products.find(item => item.id === productId)
+			if (!req.body.title) {
+				return res
+					.status(HTTP_STATUS.BAD_REQUEST_400)
+					.json({ message: 'Incorrect data' })
+			}
+			const product = productRepository.updateProduct(
+				req.params.id as string,
+				req.body.title
+			)
 			if (!product) {
 				return res
 					.status(HTTP_STATUS.NOT_FOUND_404)
 					.json({ message: 'Product not found' })
 			}
-			product.title = req.body.title
 			res.json(product)
 		} catch {
 			res
@@ -98,9 +97,13 @@ productsRoute.delete(
 	'/products/:id',
 	(req: Request<{ id: string }>, res: Response) => {
 		try {
-			const productId = parseInt(req.params.id)
-			products = products.filter(item => item.id !== productId)
-			res.json({ message: 'Product is deleted' })
+			const isDeleted = productRepository.deleteProduct(req.params.id as string)
+			if (!isDeleted) {
+				return res
+					.status(HTTP_STATUS.NOT_FOUND_404)
+					.json({ message: 'Product not found' })
+			}
+			res.json({ message: 'Product deleted' })
 		} catch {
 			res
 				.status(HTTP_STATUS.INTERNAL_SERVER_ERROR_500)

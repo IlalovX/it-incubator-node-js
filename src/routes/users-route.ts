@@ -1,25 +1,18 @@
 import { Request, Response, Router } from 'express'
 import { HTTP_STATUS } from '../constants/httpStatus'
+import { usersRepository } from '../repositories/users.repository'
+import { User } from '../types/users.types'
 
 export const usersRoute = Router({})
-
-type User = {
-	id: number
-	name: string
-}
-
-export let users: User[] = [
-	{ id: 1, name: 'Alice' },
-	{ id: 2, name: 'Bob' },
-]
 
 // USERS ROUTES
 
 usersRoute.get(
-	'/users',
+	'/',
 	(req: Request, res: Response<User[] | { message: string }>) => {
 		try {
-			res.json(users)
+			const foundUsers = usersRepository.findUsers(req.query.title as string)
+			res.json(foundUsers)
 		} catch {
 			res
 				.status(HTTP_STATUS.INTERNAL_SERVER_ERROR_500)
@@ -29,11 +22,10 @@ usersRoute.get(
 )
 
 usersRoute.get(
-	'/users/:id',
+	'/:id',
 	(req: Request<{ id: string }>, res: Response<User | { message: string }>) => {
 		try {
-			const id = parseInt(req.params.id)
-			const user = users.find(u => u.id === id)
+			const user = usersRepository.findUserById(req.params.id)
 			if (!user) {
 				return res
 					.status(HTTP_STATUS.NOT_FOUND_404)
@@ -49,7 +41,7 @@ usersRoute.get(
 )
 
 usersRoute.post(
-	'/users',
+	'/',
 	(req: Request<{}, {}, { name: string }>, res: Response) => {
 		try {
 			const { name } = req.body
@@ -58,9 +50,7 @@ usersRoute.post(
 					.status(HTTP_STATUS.BAD_REQUEST_400)
 					.json({ message: 'Name is required' })
 			}
-
-			const newUser: User = { id: Date.now(), name }
-			users.push(newUser)
+			const newUser = usersRepository.createUser(name)
 			res.status(HTTP_STATUS.CREATED_201).json(newUser)
 		} catch {
 			res
@@ -71,22 +61,26 @@ usersRoute.post(
 )
 
 usersRoute.put(
-	'/users/:id',
+	'/:id',
 	(req: Request<{ id: string }, {}, { name: string }>, res: Response) => {
-		const id = parseInt(req.params.id)
+		const { id } = req.params
 		const { name } = req.body
-		if (!name) return res.sendStatus(HTTP_STATUS.BAD_REQUEST_400)
+
+		if (!name || !id) {
+			return res.sendStatus(HTTP_STATUS.BAD_REQUEST_400)
+		}
 
 		try {
-			const user = users.find(u => u.id === id)
-			if (!user) {
+			const updatedUser = usersRepository.updateUser(id, name)
+
+			if (!updatedUser) {
 				return res
 					.status(HTTP_STATUS.NOT_FOUND_404)
 					.json({ message: 'User not found' })
 			}
-			user.name = name
-			res.status(HTTP_STATUS.NO_CONTENT_204).json(user)
-		} catch {
+
+			return res.status(HTTP_STATUS.OK_200).json(updatedUser)
+		} catch (error) {
 			res
 				.status(HTTP_STATUS.INTERNAL_SERVER_ERROR_500)
 				.json({ message: 'Server error' })
@@ -94,17 +88,23 @@ usersRoute.put(
 	}
 )
 
-usersRoute.delete(
-	'/users/:id',
-	(req: Request<{ id: string }>, res: Response) => {
-		try {
-			const id = parseInt(req.params.id)
-			users = users.filter(u => u.id !== id)
-			res.json({ message: 'User deleted' })
-		} catch {
-			res
-				.status(HTTP_STATUS.INTERNAL_SERVER_ERROR_500)
-				.json({ message: 'Server error' })
+usersRoute.delete('/:id', (req: Request<{ id: string }>, res: Response) => {
+	try {
+		const isDeleted = usersRepository.deleteUser(req.params.id)
+		if (!isDeleted) {
+			return res
+				.status(HTTP_STATUS.NOT_FOUND_404)
+				.json({ message: 'User not found' })
 		}
+		res.json({ message: 'User deleted' })
+	} catch {
+		res
+			.status(HTTP_STATUS.INTERNAL_SERVER_ERROR_500)
+			.json({ message: 'Server error' })
 	}
-)
+})
+
+usersRoute.delete('/__test__/data', (_req, res) => {
+	usersRepository.clearUsersData()
+	res.sendStatus(204)
+})
