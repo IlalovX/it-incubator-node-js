@@ -45,7 +45,7 @@ usersRoute.post(
 	(req: Request<{}, {}, { name: string }>, res: Response) => {
 		try {
 			const { name } = req.body
-			if (!name) {
+			if (!name.trim()) {
 				return res
 					.status(HTTP_STATUS.BAD_REQUEST_400)
 					.json({ message: 'Name is required' })
